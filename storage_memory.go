@@ -56,6 +56,18 @@ func (s *memoryStorage) UserSave(u *User) error {
 	return nil
 }
 
+// UserLoad retrieves single user from storage by ID.
+// ErrElementNotFound is returned if element could not be found.
+func (s *memoryStorage) UserLoad(id string) (*User, error) {
+	s.usersMu.RLock()
+	defer s.usersMu.RUnlock()
+	u, found := s.users[id]
+	if !found {
+		return nil, ErrElementNotFound
+	}
+	return u, nil
+}
+
 // UserFindByName retrieves single user entity from storage by its Name.
 // ErrElementNotFound is returned if user could not be found.
 // TODO: optimise me -> search is implemented as naive O(N) scan.
@@ -71,7 +83,7 @@ func (s *memoryStorage) UserFindByName(name string) (*User, error) {
 }
 
 // MsgSave persists single message.
-// Error ErrElementIDNotSet is dispatched whtn message ID is not set.
+// Error ErrElementIDNotSet is dispatched when message ID is not set.
 func (s *memoryStorage) MsgSave(m *Message) error {
 	if m.ID == "" {
 		return ErrElementIDNotSet

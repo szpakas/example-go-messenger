@@ -19,60 +19,35 @@ var tfUserXA_NoID = User{
 var tfMsgAA = Message{
 	ID:       "UserA_MessageA-ID",
 	Body:     "UserA_MessageA-Body",
-	AuthorID: tfUserA.ID,
-	Tag:      tfTagA,
+	AuthorID: "UserA-ID",
+	Tag:      Tag("tagA"),
 }
 
 var tfMsgAB = Message{
 	ID:       "UserA_MessageB-ID",
 	Body:     "UserA_MessageB-Body",
-	AuthorID: tfUserA.ID,
-	Tag:      tfTagA,
-}
-
-var tfMsgAXA_NoID = Message{
-	Body:     "UserA_MessageXA-Body",
-	AuthorID: tfUserA.ID,
-	Tag:      tfTagA,
-}
-
-var tfMsgAXB_NoBody = Message{
-	ID:       "MessageAXB-Body",
-	AuthorID: tfUserA.ID,
-	Tag:      tfTagA,
-}
-
-var tfMsgXXA_NoAuthorID = Message{
-	ID:   "MessageXXA-Body",
-	Body: "MessageXXA-Body",
-	Tag:  tfTagA,
-}
-
-var tfMsgAXC_NoTag = Message{
-	ID:       "MessageAXC-Body",
-	Body:     "UserA_MessageXC-Body",
-	AuthorID: tfUserA.ID,
-}
-
-var tfMsgAXD_TagTooShort = Message{
-	ID:       "MessageAXD-Body",
-	Body:     "UserA_MessageXD-Body",
-	AuthorID: tfUserA.ID,
-	Tag:      tfTagXA_TooShort,
+	AuthorID: "UserA-ID",
+	Tag:      Tag("tagA"),
 }
 
 var tfMsgBA = Message{
 	ID:       "UserB_MessageA-ID",
 	Body:     "UserB_MessageA-Body",
-	AuthorID: tfUserB.ID,
-	Tag:      tfTagA,
+	AuthorID: "UserB-ID",
+	Tag:      Tag("tagA"),
 }
 
 var tfMsgBB = Message{
 	ID:       "UserB_MessageB-ID",
 	Body:     "UserB_MessageB-Body",
-	AuthorID: tfUserB.ID,
-	Tag:      tfTagB,
+	AuthorID: "UserB-ID",
+	Tag:      Tag("tagB"),
+}
+
+var tfMsgAXA_NoID = Message{
+	Body:     "UserA_MessageXA-Body",
+	AuthorID: "UserA-ID",
+	Tag:      Tag("tagB"),
 }
 
 // -- section: Tag

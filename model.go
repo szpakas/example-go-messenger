@@ -32,23 +32,6 @@ type Message struct {
 	Tag Tag
 }
 
-// Validate validates the Message and returns error on failure.
-func (m Message) Validate() error {
-	if m.ID == "" {
-		return NewValidationError("missing ID")
-	}
-	if m.Body == "" {
-		return NewValidationError("missing Body")
-	}
-	if m.AuthorID == "" {
-		return NewValidationError("missing AuthorID")
-	}
-	if err := m.Tag.Validate(); err != nil {
-		return NewValidationError("invalid Tag", err)
-	}
-	return nil
-}
-
 // Tag represents model for a single Tag attached to a message.
 type Tag string
 

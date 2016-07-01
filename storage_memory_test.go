@@ -47,6 +47,30 @@ func Test_MemoryStorage_UserSave_Failure_NoID(t *testing.T) {
 	ar.Len(t, s.users, 0, "unexpected element stored")
 }
 
+func Test_MemoryStorage_UserLoad_Exists(t *testing.T) {
+	s, closer := tsMemoryStorageSetup()
+	defer closer()
+
+	elExp := tfUserA
+
+	// GIVEN: expected user is in storage
+	ar.NoError(t, s.UserSave(&elExp))
+
+	elGot, err := s.UserLoad(elExp.ID)
+	ar.NoError(t, err)
+	a.Equal(t, &elExp, elGot, "User from storage does not match")
+}
+
+func Test_MemoryStorage_UserLoad_NotFound(t *testing.T) {
+	s, closer := tsMemoryStorageSetup()
+	defer closer()
+
+	// GIVEN: expected user is NOT in storage
+
+	_, err := s.UserLoad(tfUserA.ID)
+	ar.Equal(t, ErrElementNotFound, err)
+}
+
 func Test_MemoryStorage_UserFindByName_Exists(t *testing.T) {
 	s, closer := tsMemoryStorageSetup()
 	defer closer()
