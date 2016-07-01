@@ -1,5 +1,9 @@
 package main
 
+var (
+	userNameLengthMin = 2
+)
+
 // TrInUser represents transport level model for single user submitted into the HTTP handler.
 type TrInUser struct {
 	// Name represents the user to the outside world.
@@ -9,7 +13,10 @@ type TrInUser struct {
 // Validate validates the User and returns error on failure.
 func (m TrInUser) Validate() error {
 	if m.Name == "" {
-		return NewValidationError("missing Name")
+		return NewValidationError("Name missing")
+	}
+	if len(m.Name) < userNameLengthMin {
+		return NewValidationError("Name too short")
 	}
 	return nil
 }

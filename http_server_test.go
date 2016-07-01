@@ -1,20 +1,17 @@
 package main
 
 import (
-	"testing"
-
+	"encoding/json"
+	"errors"
 	"fmt"
-	a "github.com/stretchr/testify/assert"
-	ar "github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"testing"
 
-	"encoding/json"
-	"github.com/davecgh/go-spew/spew"
+	a "github.com/stretchr/testify/assert"
+	ar "github.com/stretchr/testify/require"
 )
-
-var _ = spew.Config
 
 func Test_HTTPServer_Factory(t *testing.T) {
 	st := NewMemoryStorage()
@@ -24,10 +21,6 @@ func Test_HTTPServer_Factory(t *testing.T) {
 	ar.NotNil(t, s, "empty element returned")
 
 	a.Equal(t, "A12345.example.com:9876", s.Addr, "server address mismatch")
-
-	//ar.IsType(t, &httpHandler{}, s.Handler, "mismatch in handler type")
-	//hCst := s.Handler.(*httpHandler)
-	//a.Equal(t, st, hCst.Storer, "storage not attached to handler")
 }
 
 func Test_HTTPHandler_User_Create_Success(t *testing.T) {
@@ -51,6 +44,100 @@ func Test_HTTPHandler_User_Create_Success(t *testing.T) {
 	a.NotZero(t, userGot.ID, "User: zero ID")
 }
 
+type tmMemoryStorageMock struct {
+	*memoryStorage
+
+	inUserSaveCalled bool
+	outUserSaveErr   error
+}
+
+func (s *tmMemoryStorageMock) UserSave(u *User) error {
+	s.inUserSaveCalled = true
+
+	if s.outUserSaveErr != nil {
+		return s.outUserSaveErr
+	}
+	return s.memoryStorage.UserSave(u)
+}
+
+func NewTmMemoryStorageMock() *tmMemoryStorageMock {
+	sto := NewMemoryStorage()
+	return &tmMemoryStorageMock{
+		memoryStorage: sto,
+	}
+}
+
+func Test_HTTPHandler_User_Create_Failure(t *testing.T) {
+	var ts *httptest.Server
+	defer func() {
+		if ts != nil {
+			ts.Close()
+		}
+	}()
+
+	tests := map[string]struct {
+		reqBody     string
+		dbUsers     []User
+		usErr       error
+		usCalledExp bool
+		resStatus   int
+	}{
+		"validation: empty object/name empty": {
+			reqBody:   `{}`,
+			resStatus: http.StatusBadRequest,
+		},
+		"validation: name too short": {
+			reqBody:   `{"name": "A"}`,
+			resStatus: http.StatusBadRequest,
+		},
+		"already exists": {
+			reqBody:   `{"name": "UserA-Name"}`,
+			dbUsers:   []User{tfUserA},
+			resStatus: http.StatusBadRequest,
+		},
+		"JSON: malformed": {
+			reqBody:   `NotA-JSON`,
+			resStatus: http.StatusBadRequest,
+		},
+		"JSON: type not matching": {
+			reqBody:   `[{"A":1},{"B":"123"}]`,
+			resStatus: http.StatusBadRequest,
+		},
+		"UserSave error": {
+			reqBody:     `{"name": "ABCDE"}`,
+			usErr:       errors.New("some kind of DB error"),
+			usCalledExp: true,
+			resStatus:   http.StatusInternalServerError,
+		},
+	}
+
+	for sym, tc := range tests {
+		st := NewTmMemoryStorageMock()
+		st.outUserSaveErr = tc.usErr
+
+		h := NewHTTPDefaultHandler(st)
+		ts = httptest.NewServer(h)
+
+		// GIVEN: expected users are in DB
+		for _, u := range tc.dbUsers {
+			uC := u
+			ar.NoError(t, st.UserSave(&uC), "case: %s", sym)
+		}
+		st.inUserSaveCalled = false
+
+		// WHEN: user create is called
+		res, err := http.Post(fmt.Sprintf("%s/v1/users", ts.URL), "application/json", strings.NewReader(tc.reqBody))
+
+		// THEN: validate response
+		ar.NoError(t, err, "[%s] unexpected error from HTTP client", sym)
+		a.EqualValues(t, 0, res.ContentLength, "[%s] non empty response body", sym)
+		a.Equal(t, tc.resStatus, res.StatusCode, "[%s] mismatch on response code", sym)
+
+		// AND: validate storage access
+		a.Equal(t, tc.usCalledExp, st.inUserSaveCalled, "[%s] userSave function call status mismatch", sym)
+	}
+}
+
 func Test_HTTPHandler_Message_Create_Success(t *testing.T) {
 	st := NewMemoryStorage()
 	h := NewHTTPDefaultHandler(st)
@@ -68,6 +155,11 @@ func Test_HTTPHandler_Message_Create_Success(t *testing.T) {
 	a.EqualValues(t, 0, res.ContentLength, "non empty response body")
 	a.Equal(t, http.StatusCreated, res.StatusCode, "mismatch on response code")
 
+	matches := rPathMsgRead.FindStringSubmatch(res.Header.Get("Location"))
+	// matches also have the source string on index 0
+	ar.Len(t, matches, 2, "response: location header does not point to message read action")
+	msgIDFromHeader := matches[1]
+
 	// AND: validate tag association
 	msgsIDs, err := st.MsgsIDsFindByTag(tfTrInMsgAA.Tag)
 	ar.NoError(t, err, "unexpected error on tag seek")
@@ -79,6 +171,7 @@ func Test_HTTPHandler_Message_Create_Success(t *testing.T) {
 	a.Equal(t, tfMsgAA.AuthorID, msgGot.AuthorID, "message AuthorID mismatch")
 	a.Equal(t, tfMsgAA.Body, msgGot.Body, "message Body mismatch")
 	a.Equal(t, tfMsgAA.Tag, msgGot.Tag, "message Tag mismatch")
+	a.Equal(t, msgIDFromHeader, msgGot.ID, "message ID mismatch")
 }
 
 func Test_HTTPHandler_Message_Find_Success_Found(t *testing.T) {
@@ -170,6 +263,66 @@ func Test_HTTPHandler_Message_Find_Success_NotFound(t *testing.T) {
 
 	// GIVEN: no matching messages are in DB
 	res, err := http.Get(fmt.Sprintf("%s/v1/messages?tag=%s", ts.URL, "NON_EXISTING_TAG"))
+
+	// THEN: validate response
+	ar.NoError(t, err, "unexpected error from HTTP client")
+	a.Equal(t, http.StatusNotFound, res.StatusCode, "mismatch on response code")
+	a.EqualValues(t, 0, res.ContentLength, "non empty response body")
+	a.Zero(t, res.Header.Get("Content-Encoding"), "unexpected content encoding response header")
+}
+
+func Test_HTTPHandler_Message_Read_Success_Found(t *testing.T) {
+	st := NewMemoryStorage()
+	h := NewHTTPDefaultHandler(st)
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	// GIVEN: matching message is in DB
+	user := tfUserA
+	msg := tfMsgAA
+	ar.NoError(t, st.UserSave(&user))
+	ar.NoError(t, st.MsgSave(&msg))
+
+	res, err := http.Get(fmt.Sprintf("%s/v1/messages/%s", ts.URL, msg.ID))
+
+	// THEN: validate response
+	ar.NoError(t, err, "unexpected error from HTTP client")
+
+	a.Equal(t, http.StatusOK, res.StatusCode, "mismatch on response code")
+	a.Equal(t, "application/json", res.Header.Get("Content-Encoding"), "mismatch on response content encoding")
+
+	var resBodyGot TrOutMessage
+	err = json.NewDecoder(res.Body).Decode(&resBodyGot)
+	res.Body.Close()
+	ar.NoError(t, err, "unexpected error on response body read")
+
+	a.Equal(t, tfTrOutMsgAA, resBodyGot)
+}
+
+func Test_HTTPHandler_Message_Read_Success_NotFound(t *testing.T) {
+	st := NewMemoryStorage()
+	h := NewHTTPDefaultHandler(st)
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	// GIVEN: message NOT in DB
+	res, err := http.Get(fmt.Sprintf("%s/v1/messages/non-existing-123", ts.URL))
+
+	// THEN: validate response
+	ar.NoError(t, err, "unexpected error from HTTP client")
+	a.Equal(t, http.StatusNotFound, res.StatusCode, "mismatch on response code")
+	a.EqualValues(t, 0, res.ContentLength, "non empty response body")
+	a.Zero(t, res.Header.Get("Content-Encoding"), "unexpected content encoding response header")
+}
+
+func Test_HTTPHandler_Message_GET_unknownPath(t *testing.T) {
+	st := NewMemoryStorage()
+	h := NewHTTPDefaultHandler(st)
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	// GIVEN: message NOT in DB
+	res, err := http.Get(fmt.Sprintf("%s/v1/messages/some-kind-of/strange-123-path", ts.URL))
 
 	// THEN: validate response
 	ar.NoError(t, err, "unexpected error from HTTP client")

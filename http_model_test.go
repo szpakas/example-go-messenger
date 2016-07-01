@@ -19,7 +19,8 @@ func Test_HTTPModel_TrInUser_Validate_Failure(t *testing.T) {
 		obj  TrInUser
 		eStr string
 	}{
-		"no Name": {TrInUser{}, "missing Name"},
+		"no Name":        {TrInUser{}, "Name missing"},
+		"name too short": {TrInUser{Name: "A"}, "Name too short"},
 	}
 
 	for s, tc := range tests {

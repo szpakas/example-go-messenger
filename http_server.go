@@ -4,13 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/satori/go.uuid"
-
-	"github.com/davecgh/go-spew/spew"
 )
-
-var _ = spew.Config
 
 // UserStorer is storage interface for User related operations
 type UserStorer interface {
@@ -47,6 +44,8 @@ func NewHTTPDefaultHandler(st Storer) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/v1/users", &usersHandler{Storer: st})
 	mux.Handle("/v1/messages", &messagesHandler{Storer: st})
+	// duplication needed to handle base path without redirection
+	mux.Handle("/v1/messages/", &messagesHandler{Storer: st})
 
 	return mux
 }
@@ -58,30 +57,52 @@ type usersHandler struct {
 
 func (h *usersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var trIn TrInUser
-	_ = json.NewDecoder(r.Body).Decode(&trIn)
+	err := json.NewDecoder(r.Body).Decode(&trIn)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if trIn.Validate() != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.Storer.UserFindByName(trIn.Name); err != ErrElementNotFound {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	user := User{
 		ID:   uuid.NewV1().String(),
 		Name: trIn.Name,
 	}
 
-	_ = h.Storer.UserSave(&user)
+	err = h.Storer.UserSave(&user)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
 }
 
-// messagesHandler is HTTP handler for users related actions
+// messagesHandler is HTTP handler for messages related actions
 type messagesHandler struct {
 	Storer Storer
 }
 
 func (h *messagesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
+	switch true {
+	case r.Method == http.MethodPost:
 		h.handleCreate(w, r)
 		return
-	case http.MethodGet:
+	case r.Method == http.MethodGet && (r.URL.Path == "/v1/messages" || r.URL.Path == "/v1/messages/"):
 		h.handleFind(w, r)
+		return
+	case r.Method == http.MethodGet:
+		h.handleRead(w, r)
 		return
 	}
 }
@@ -101,7 +122,17 @@ func (h *messagesHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	_ = h.Storer.MsgSave(&msg)
 
+	w.Header().Set("Location", "/v1/messages/"+msg.ID)
 	w.WriteHeader(http.StatusCreated)
+}
+
+func msgToTransport(msg *Message, author *User) TrOutMessage {
+	return TrOutMessage{
+		ID:     msg.ID,
+		Author: author.Name,
+		Body:   msg.Body,
+		Tag:    msg.Tag,
+	}
 }
 
 func (h *messagesHandler) handleFind(w http.ResponseWriter, r *http.Request) {
@@ -118,15 +149,38 @@ func (h *messagesHandler) handleFind(w http.ResponseWriter, r *http.Request) {
 	var trOut TrOutMessagesCollection
 	for _, mID := range msgsIDs {
 		msg, _ := h.Storer.MsgLoad(mID)
-		user, _ := h.Storer.UserLoad(msg.AuthorID)
+		author, _ := h.Storer.UserLoad(msg.AuthorID)
 
-		trOut = append(trOut, TrOutMessage{
-			ID:     msg.ID,
-			Author: user.Name,
-			Body:   msg.Body,
-			Tag:    msg.Tag,
-		})
+		trOut = append(trOut, msgToTransport(msg, author))
 	}
+
+	w.Header().Set("Content-Encoding", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(trOut)
+}
+
+// allowed chars in ID: 0-9a-zA-Z-_ (space is NOT allowed)
+var rPathMsgRead = regexp.MustCompile(`^/v1/messages/([\da-zA-Z\-_]+)/?$`)
+
+func (h *messagesHandler) handleRead(w http.ResponseWriter, r *http.Request) {
+	matches := rPathMsgRead.FindStringSubmatch(r.URL.Path)
+
+	// matches also have the source string on index 0
+	if len(matches) != 2 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	// msgID is on index 1
+	msg, err := h.Storer.MsgLoad(matches[1])
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	author, _ := h.Storer.UserLoad(msg.AuthorID)
+
+	trOut := msgToTransport(msg, author)
 
 	w.Header().Set("Content-Encoding", "application/json")
 	w.WriteHeader(http.StatusOK)
