@@ -44,29 +44,6 @@ func Test_HTTPHandler_User_Create_Success(t *testing.T) {
 	a.NotZero(t, userGot.ID, "User: zero ID")
 }
 
-type tmMemoryStorageMock struct {
-	*memoryStorage
-
-	inUserSaveCalled bool
-	outUserSaveErr   error
-}
-
-func (s *tmMemoryStorageMock) UserSave(u *User) error {
-	s.inUserSaveCalled = true
-
-	if s.outUserSaveErr != nil {
-		return s.outUserSaveErr
-	}
-	return s.memoryStorage.UserSave(u)
-}
-
-func NewTmMemoryStorageMock() *tmMemoryStorageMock {
-	sto := NewMemoryStorage()
-	return &tmMemoryStorageMock{
-		memoryStorage: sto,
-	}
-}
-
 func Test_HTTPHandler_User_Create_Failure(t *testing.T) {
 	var ts *httptest.Server
 	defer func() {
@@ -174,6 +151,87 @@ func Test_HTTPHandler_Message_Create_Success(t *testing.T) {
 	a.Equal(t, msgIDFromHeader, msgGot.ID, "message ID mismatch")
 }
 
+func Test_HTTPHandler_Message_Create_Failure(t *testing.T) {
+	var ts *httptest.Server
+	defer func() {
+		if ts != nil {
+			ts.Close()
+		}
+	}()
+
+	tests := map[string]struct {
+		reqBody     string
+		dbUsers     []User
+		ufErr       error // uf = UserFind
+		ufCalledExp bool
+		msErr       error // ms = MsgSave
+		msCalledExp bool
+		resStatus   int
+	}{
+		"JSON: malformed": {
+			reqBody:   `NotA-JSON`,
+			resStatus: http.StatusBadRequest,
+		},
+		"JSON: type not matching": {
+			reqBody:   `[{"A":1},{"B":"123"}]`,
+			resStatus: http.StatusBadRequest,
+		},
+		"validation: empty object/name empty": {
+			reqBody:   `{}`,
+			resStatus: http.StatusBadRequest,
+		},
+		"unknown author": {
+			reqBody:     `{"author": "UserUnknown-Name","body":"qweasd","tag":"tagA"}`,
+			dbUsers:     []User{tfUserA},
+			ufCalledExp: true,
+			resStatus:   http.StatusBadRequest,
+		},
+		"MsgSave error": {
+			reqBody:     tfTrInMsgAA_JSON,
+			dbUsers:     []User{tfUserA},
+			ufCalledExp: true,
+			msErr:       errors.New("some kind of DB error"),
+			msCalledExp: true,
+			resStatus:   http.StatusInternalServerError,
+		},
+		"UserFind error": {
+			reqBody:     tfTrInMsgAA_JSON,
+			ufCalledExp: true,
+			ufErr:       errors.New("some kind of DB error"),
+			msCalledExp: false,
+			resStatus:   http.StatusInternalServerError,
+		},
+	}
+
+	for sym, tc := range tests {
+		st := NewTmMemoryStorageMock()
+		st.outUserFindErr = tc.ufErr
+		st.outMsgSaveErr = tc.msErr
+
+		h := NewHTTPDefaultHandler(st)
+		ts = httptest.NewServer(h)
+
+		// GIVEN: expected users are in DB
+		for _, u := range tc.dbUsers {
+			uC := u
+			ar.NoError(t, st.UserSave(&uC), "case: %s", sym)
+		}
+		st.inUserSaveCalled = false
+
+		// WHEN: message create is called
+		res, err := http.Post(fmt.Sprintf("%s/v1/messages", ts.URL), "application/json", strings.NewReader(tc.reqBody))
+
+		// THEN: validate response
+		ar.NoError(t, err, "[%s] unexpected error from HTTP client", sym)
+		a.EqualValues(t, 0, res.ContentLength, "[%s] non empty response body", sym)
+		a.Equal(t, tc.resStatus, res.StatusCode, "[%s] mismatch on response code", sym)
+
+		// AND: validate storage access
+		a.Equal(t, tc.ufCalledExp, st.inUserFindCalled, "[%s] UserFind function call status mismatch", sym)
+		a.Equal(t, tc.msCalledExp, st.inMsgSaveCalled, "[%s] MsgSave function call status mismatch", sym)
+	}
+}
+
 func Test_HTTPHandler_Message_Find_Success_Found(t *testing.T) {
 	var ts *httptest.Server
 	defer func() {
@@ -231,7 +289,7 @@ func Test_HTTPHandler_Message_Find_Success_Found(t *testing.T) {
 			continue
 		}
 		a.Equal(t, http.StatusOK, res.StatusCode, "mismatch on response code")
-		a.Equal(t, "application/json", res.Header.Get("Content-Encoding"), "mismatch on response content encoding")
+		a.Equal(t, "application/json", res.Header.Get("Content-Type"), "mismatch on response content encoding")
 
 		var resBodyGot TrOutMessagesCollection
 		err = json.NewDecoder(res.Body).Decode(&resBodyGot)
@@ -268,7 +326,91 @@ func Test_HTTPHandler_Message_Find_Success_NotFound(t *testing.T) {
 	ar.NoError(t, err, "unexpected error from HTTP client")
 	a.Equal(t, http.StatusNotFound, res.StatusCode, "mismatch on response code")
 	a.EqualValues(t, 0, res.ContentLength, "non empty response body")
-	a.Zero(t, res.Header.Get("Content-Encoding"), "unexpected content encoding response header")
+}
+
+func Test_HTTPHandler_Message_Find_Failure(t *testing.T) {
+	var ts *httptest.Server
+	defer func() {
+		if ts != nil {
+			ts.Close()
+		}
+	}()
+
+	tests := map[string]struct {
+		dbUsers     []User
+		dbMsg       []Message
+		tag         Tag
+		mfCalledExp bool // mf = MsgFind
+		mfErr       error
+		mlCalledExp bool // ml = MsgLoad
+		mlErr       error
+		ulCalledExp bool // ul = UserLoad
+		ulErr       error
+		resStatus   int
+	}{
+		"MsgFind error": {
+			dbUsers:     []User{tfUserA},
+			dbMsg:       []Message{tfMsgAA},
+			tag:         tfTrInMsgAA.Tag,
+			mfCalledExp: true,
+			mfErr:       errors.New("some kind of DB error"),
+			resStatus:   http.StatusInternalServerError,
+		},
+		"MsgLoad error": {
+			dbUsers:     []User{tfUserA},
+			dbMsg:       []Message{tfMsgAA},
+			tag:         tfTrInMsgAA.Tag,
+			mfCalledExp: true,
+			mlCalledExp: true,
+			mlErr:       errors.New("some kind of DB error"),
+			resStatus:   http.StatusInternalServerError,
+		},
+		"UserLoad error": {
+			dbUsers:     []User{tfUserA},
+			dbMsg:       []Message{tfMsgAA},
+			tag:         tfTrInMsgAA.Tag,
+			mfCalledExp: true,
+			mlCalledExp: true,
+			ulCalledExp: true,
+			ulErr:       errors.New("some kind of DB error"),
+			resStatus:   http.StatusInternalServerError,
+		},
+	}
+
+	for sym, tc := range tests {
+		st := NewTmMemoryStorageMock()
+		st.outMsgFindErr = tc.mfErr
+		st.outMsgLoadErr = tc.mlErr
+		st.outUserLoadErr = tc.ulErr
+
+		h := NewHTTPDefaultHandler(st)
+		ts = httptest.NewServer(h)
+
+		// GIVEN: user and message are in DB
+		for _, u := range tc.dbUsers {
+			uC := u
+			ar.NoError(t, st.UserSave(&uC), "case: %s", sym)
+		}
+		st.inUserSaveCalled = false
+		for _, m := range tc.dbMsg {
+			mC := m
+			ar.NoError(t, st.MsgSave(&mC), "case: %s", sym)
+		}
+		st.inMsgSaveCalled = false
+
+		// WHEN: message create is called
+		res, err := http.Get(fmt.Sprintf("%s/v1/messages?tag=%s", ts.URL, tc.tag))
+
+		// THEN: validate response
+		ar.NoError(t, err, "[%s] unexpected error from HTTP client", sym)
+		a.EqualValues(t, 0, res.ContentLength, "[%s] non empty response body", sym)
+		a.Equal(t, tc.resStatus, res.StatusCode, "[%s] mismatch on response code", sym)
+
+		// AND: validate storage access
+		a.Equal(t, tc.mfCalledExp, st.inMsgFindCalled, "[%s] MsgFind function call status mismatch", sym)
+		a.Equal(t, tc.mlCalledExp, st.inMsgLoadCalled, "[%s] MsgLoad function call status mismatch", sym)
+		a.Equal(t, tc.ulCalledExp, st.inUserLoadCalled, "[%s] UserLoad function call status mismatch", sym)
+	}
 }
 
 func Test_HTTPHandler_Message_Read_Success_Found(t *testing.T) {
@@ -289,7 +431,7 @@ func Test_HTTPHandler_Message_Read_Success_Found(t *testing.T) {
 	ar.NoError(t, err, "unexpected error from HTTP client")
 
 	a.Equal(t, http.StatusOK, res.StatusCode, "mismatch on response code")
-	a.Equal(t, "application/json", res.Header.Get("Content-Encoding"), "mismatch on response content encoding")
+	a.Equal(t, "application/json", res.Header.Get("Content-Type"), "mismatch on response content encoding")
 
 	var resBodyGot TrOutMessage
 	err = json.NewDecoder(res.Body).Decode(&resBodyGot)
@@ -312,7 +454,86 @@ func Test_HTTPHandler_Message_Read_Success_NotFound(t *testing.T) {
 	ar.NoError(t, err, "unexpected error from HTTP client")
 	a.Equal(t, http.StatusNotFound, res.StatusCode, "mismatch on response code")
 	a.EqualValues(t, 0, res.ContentLength, "non empty response body")
-	a.Zero(t, res.Header.Get("Content-Encoding"), "unexpected content encoding response header")
+}
+
+func Test_HTTPHandler_Message_Read_Failure(t *testing.T) {
+	var ts *httptest.Server
+	defer func() {
+		if ts != nil {
+			ts.Close()
+		}
+	}()
+
+	tests := map[string]struct {
+		dbUsers     []User
+		dbMsg       []Message
+		msgID       string
+		mlCalledExp bool // ml = MsgLoad
+		mlErr       error
+		ulCalledExp bool // ul = UserLoad
+		ulErr       error
+		resStatus   int
+	}{
+		"MsgLoad error": {
+			dbUsers:     []User{tfUserA},
+			dbMsg:       []Message{tfMsgAA},
+			msgID:       tfMsgAA.ID,
+			mlCalledExp: true,
+			mlErr:       errors.New("some kind of DB error"),
+			resStatus:   http.StatusInternalServerError,
+		},
+		"UserLoad error: user not found": {
+			dbUsers:     []User{tfUserA},
+			dbMsg:       []Message{tfMsgAA},
+			msgID:       tfMsgAA.ID,
+			mlCalledExp: true,
+			ulCalledExp: true,
+			ulErr:       ErrElementNotFound,
+			resStatus:   http.StatusInternalServerError,
+		},
+		"UserLoad error: db error": {
+			dbUsers:     []User{tfUserA},
+			dbMsg:       []Message{tfMsgAA},
+			msgID:       tfMsgAA.ID,
+			mlCalledExp: true,
+			ulCalledExp: true,
+			ulErr:       errors.New("some kind of DB error"),
+			resStatus:   http.StatusInternalServerError,
+		},
+	}
+
+	for sym, tc := range tests {
+		st := NewTmMemoryStorageMock()
+		st.outMsgLoadErr = tc.mlErr
+		st.outUserLoadErr = tc.ulErr
+
+		h := NewHTTPDefaultHandler(st)
+		ts = httptest.NewServer(h)
+
+		// GIVEN: user and message are in DB
+		for _, u := range tc.dbUsers {
+			uC := u
+			ar.NoError(t, st.UserSave(&uC), "case: %s", sym)
+		}
+		st.inUserSaveCalled = false
+		for _, m := range tc.dbMsg {
+			mC := m
+			ar.NoError(t, st.MsgSave(&mC), "case: %s", sym)
+		}
+		st.inMsgSaveCalled = false
+
+		// WHEN: message create is called
+		res, err := http.Get(fmt.Sprintf("%s/v1/messages/%s", ts.URL, tc.msgID))
+
+		// THEN: validate response
+		ar.NoError(t, err, "[%s] unexpected error from HTTP client", sym)
+		a.EqualValues(t, 0, res.ContentLength, "[%s] non empty response body", sym)
+		a.Equal(t, tc.resStatus, res.StatusCode, "[%s] mismatch on response code", sym)
+
+		// AND: validate storage access
+		a.Equal(t, tc.mlCalledExp, st.inMsgLoadCalled, "[%s] MsgLoad function call status mismatch", sym)
+		a.Equal(t, tc.ulCalledExp, st.inUserLoadCalled, "[%s] UserLoad function call status mismatch", sym)
+	}
 }
 
 func Test_HTTPHandler_Message_GET_unknownPath(t *testing.T) {
@@ -328,5 +549,4 @@ func Test_HTTPHandler_Message_GET_unknownPath(t *testing.T) {
 	ar.NoError(t, err, "unexpected error from HTTP client")
 	a.Equal(t, http.StatusNotFound, res.StatusCode, "mismatch on response code")
 	a.EqualValues(t, 0, res.ContentLength, "non empty response body")
-	a.Zero(t, res.Header.Get("Content-Encoding"), "unexpected content encoding response header")
 }

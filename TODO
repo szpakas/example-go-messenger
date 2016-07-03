@@ -1,3 +1,3 @@
-- HTTP handler middleware: logging
 - HTTP handler middleware: metrics/prometheus
-- HTTP Handler, messages: add error handling
+- Graceful shutdown
+- Add Swagger documentation for endpoints

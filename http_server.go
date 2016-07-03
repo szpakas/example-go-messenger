@@ -109,9 +109,27 @@ func (h *messagesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *messagesHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var trIn TrInMessage
-	_ = json.NewDecoder(r.Body).Decode(&trIn)
+	err := json.NewDecoder(r.Body).Decode(&trIn)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-	author, _ := h.Storer.UserFindByName(trIn.Author)
+	if trIn.Validate() != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	author, err := h.Storer.UserFindByName(trIn.Author)
+	switch err {
+	case nil:
+	case ErrElementNotFound:
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	msg := Message{
 		ID:       uuid.NewV1().String(),
@@ -120,7 +138,11 @@ func (h *messagesHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		AuthorID: author.ID,
 	}
 
-	_ = h.Storer.MsgSave(&msg)
+	err = h.Storer.MsgSave(&msg)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Location", "/v1/messages/"+msg.ID)
 	w.WriteHeader(http.StatusCreated)
@@ -144,17 +166,28 @@ func (h *messagesHandler) handleFind(w http.ResponseWriter, r *http.Request) {
 	case ErrElementNotFound:
 		w.WriteHeader(http.StatusNotFound)
 		return
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	var trOut TrOutMessagesCollection
 	for _, mID := range msgsIDs {
-		msg, _ := h.Storer.MsgLoad(mID)
-		author, _ := h.Storer.UserLoad(msg.AuthorID)
+		msg, err := h.Storer.MsgLoad(mID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		author, err := h.Storer.UserLoad(msg.AuthorID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		trOut = append(trOut, msgToTransport(msg, author))
 	}
 
-	w.Header().Set("Content-Encoding", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(trOut)
 }
@@ -173,16 +206,25 @@ func (h *messagesHandler) handleRead(w http.ResponseWriter, r *http.Request) {
 
 	// msgID is on index 1
 	msg, err := h.Storer.MsgLoad(matches[1])
-	if err != nil {
+	switch err {
+	case nil:
+	case ErrElementNotFound:
 		w.WriteHeader(http.StatusNotFound)
+		return
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	author, _ := h.Storer.UserLoad(msg.AuthorID)
+	author, err := h.Storer.UserLoad(msg.AuthorID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	trOut := msgToTransport(msg, author)
 
-	w.Header().Set("Content-Encoding", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(trOut)
 }
