@@ -1,3 +1,4 @@
 - HTTP handler middleware: metrics/prometheus
 - Graceful shutdown
-- Add Swagger documentation for endpoints
+- Make BadRequest responses verbose, especially on validation failures.
+- Separate REST related code to separate package so that Swagger annotations are not clashing with GoDoc ones.

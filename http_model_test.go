@@ -16,11 +16,11 @@ func Test_HTTPModel_TrInUser_Validate_Success(t *testing.T) {
 
 func Test_HTTPModel_TrInUser_Validate_Failure(t *testing.T) {
 	tests := map[string]struct {
-		obj  TrInUser
+		obj  UserIn
 		eStr string
 	}{
-		"no Name":        {TrInUser{}, "Name missing"},
-		"name too short": {TrInUser{Name: "A"}, "Name too short"},
+		"no Name":        {UserIn{}, "Name missing"},
+		"name too short": {UserIn{Name: "A"}, "Name too short"},
 	}
 
 	for s, tc := range tests {
@@ -41,7 +41,7 @@ func Test_HTTPModel_TrInMsg_Validate_Success(t *testing.T) {
 
 func Test_HTTPModel_TrInMsg_Validate_Failure(t *testing.T) {
 	tests := map[string]struct {
-		obj  TrInMessage
+		obj  MessageIn
 		eStr string
 	}{
 		"no Body":                {tfTrInMsgAXB_NoBody, "missing Body"},

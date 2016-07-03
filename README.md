@@ -35,6 +35,18 @@ HTTPPort int `envconfig:"default=8080"`
 LogLevel string `envconfig:"default=info"`
 ```
 
+## Endpoints
+
+Swagger 2.0 is used for REST endpoint documentation. It's available at /v1/swagger.json.
+
+[swagger-go](https://github.com/go-swagger/go-swagger) project is used for documentation through annotations.
+
+To regenerate:
+```bash
+
+swagger generate spec -o ./swagger.json
+```
+
 ## Using docker
 
 build locally

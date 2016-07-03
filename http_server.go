@@ -42,10 +42,22 @@ func NewHTTPServer(host string, port int, h http.Handler) *http.Server {
 // TODO: test me
 func NewHTTPDefaultHandler(st Storer) http.Handler {
 	mux := http.NewServeMux()
+
+	// swagger:route POST /v1/users users UserCreate
+	//
+	// Create user.
+	//
+	//     Responses:
+	//       201: UserCreatedResponse
+	//       400: BadRequestError
+	//       500: InternalServerError
 	mux.Handle("/v1/users", &usersHandler{Storer: st})
+
 	mux.Handle("/v1/messages", &messagesHandler{Storer: st})
 	// duplication needed to handle base path without redirection
 	mux.Handle("/v1/messages/", &messagesHandler{Storer: st})
+
+	mux.Handle("/v1/swagger.json", &swaggerHandler{})
 
 	return mux
 }
@@ -56,7 +68,12 @@ type usersHandler struct {
 }
 
 func (h *usersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var trIn TrInUser
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	var trIn UserIn
 	err := json.NewDecoder(r.Body).Decode(&trIn)
 
 	if err != nil {
@@ -96,19 +113,43 @@ type messagesHandler struct {
 func (h *messagesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch true {
 	case r.Method == http.MethodPost:
+		// swagger:route POST /v1/messages messages MessageCreate
+		//
+		// Create message.
+		//
+		//     Responses:
+		//       201: MessageCreatedResponse
+		//       400: BadRequestError
+		//       500: InternalServerError
 		h.handleCreate(w, r)
 		return
 	case r.Method == http.MethodGet && (r.URL.Path == "/v1/messages" || r.URL.Path == "/v1/messages/"):
+		// swagger:route GET /v1/messages messages MessagesFind
+		//
+		// Get collection of messages matching requested tag.
+		//
+		//     Responses:
+		//       200: MessagesCollectionResponse
+		//       404: NotFoundError
+		//       500: InternalServerError
 		h.handleFind(w, r)
 		return
 	case r.Method == http.MethodGet:
+		// swagger:route GET /v1/messages/{id} messages MessageRead
+		//
+		// Get details of single message by its ID.
+		//
+		//     Responses:
+		//       200: MessageReadResponse
+		//       404: NotFoundError
+		//       500: InternalServerError
 		h.handleRead(w, r)
 		return
 	}
 }
 
 func (h *messagesHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
-	var trIn TrInMessage
+	var trIn MessageIn
 	err := json.NewDecoder(r.Body).Decode(&trIn)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -148,8 +189,8 @@ func (h *messagesHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-func msgToTransport(msg *Message, author *User) TrOutMessage {
-	return TrOutMessage{
+func msgToTransport(msg *Message, author *User) MessageOut {
+	return MessageOut{
 		ID:     msg.ID,
 		Author: author.Name,
 		Body:   msg.Body,
@@ -171,7 +212,7 @@ func (h *messagesHandler) handleFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var trOut TrOutMessagesCollection
+	var trOut MessagesCollectionOut
 	for _, mID := range msgsIDs {
 		msg, err := h.Storer.MsgLoad(mID)
 		if err != nil {
@@ -227,4 +268,11 @@ func (h *messagesHandler) handleRead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(trOut)
+}
+
+// swaggerHandler is HTTP handler for swagger definition file
+type swaggerHandler struct{}
+
+func (h *swaggerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "./swagger.json")
 }

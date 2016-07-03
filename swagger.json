@@ -1,0 +1,267 @@
+{
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "schemes": [
+    "http"
+  ],
+  "swagger": "2.0",
+  "info": {
+    "description": "the purpose of this application is to provide an test bed platform\nfor toying with GO",
+    "title": "Messenger API.",
+    "termsOfService": "there are no TOS at this moment, use at your own risk we take no responsibility",
+    "contact": {
+      "name": "Adam Szpakowski",
+      "email": "szpakas@gmail.com"
+    },
+    "license": {
+      "name": "Apache 2.0"
+    },
+    "version": "0.0.1"
+  },
+  "host": "localhost:8080",
+  "basePath": "/",
+  "paths": {
+    "/v1/messages": {
+      "get": {
+        "tags": [
+          "messages"
+        ],
+        "summary": "Get collection of messages matching requested tag.",
+        "operationId": "MessagesFind",
+        "parameters": [
+          {
+            "type": "string",
+            "x-go-name": "Tag",
+            "description": "Tag attached to the message",
+            "name": "tag",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/MessagesCollectionResponse"
+          },
+          "404": {
+            "$ref": "#/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/responses/InternalServerError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "messages"
+        ],
+        "summary": "Create message.",
+        "operationId": "MessageCreate",
+        "parameters": [
+          {
+            "x-go-name": "Message",
+            "description": "The message to submit",
+            "name": "message",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/MessageIn"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "$ref": "#/responses/MessageCreatedResponse"
+          },
+          "400": {
+            "$ref": "#/responses/BadRequestError"
+          },
+          "500": {
+            "$ref": "#/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/messages/{id}": {
+      "get": {
+        "tags": [
+          "messages"
+        ],
+        "summary": "Get details of single message by its ID.",
+        "operationId": "MessageRead",
+        "parameters": [
+          {
+            "type": "string",
+            "x-go-name": "ID",
+            "description": "ID represents the unique identifier for the message",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/MessageReadResponse"
+          },
+          "404": {
+            "$ref": "#/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/users": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Create user.",
+        "operationId": "UserCreate",
+        "parameters": [
+          {
+            "x-go-name": "User",
+            "description": "User to create",
+            "name": "user",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UserIn"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "$ref": "#/responses/UserCreatedResponse"
+          },
+          "400": {
+            "$ref": "#/responses/BadRequestError"
+          },
+          "500": {
+            "$ref": "#/responses/InternalServerError"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "MessageIn": {
+      "type": "object",
+      "title": "MessageIn represents transport level model for single message sent by user to the system.",
+      "required": [
+        "body",
+        "author",
+        "tag"
+      ],
+      "properties": {
+        "author": {
+          "description": "Author is an Name of the user who authored message",
+          "type": "string",
+          "x-go-name": "Author"
+        },
+        "body": {
+          "description": "Body represents the actual message",
+          "type": "string",
+          "x-go-name": "Body"
+        },
+        "tag": {
+          "description": "Tag is a tag attached to a message",
+          "type": "string",
+          "minLength": 2,
+          "x-go-name": "Tag"
+        }
+      },
+      "x-go-package": "github.com/szpakas/example-go-messenger"
+    },
+    "MessageOut": {
+      "type": "object",
+      "required": [
+        "id",
+        "body",
+        "author",
+        "tag"
+      ],
+      "properties": {
+        "author": {
+          "description": "Author is an Name of the user who authored message",
+          "type": "string",
+          "x-go-name": "Author"
+        },
+        "body": {
+          "description": "Body represents the actual message",
+          "type": "string",
+          "x-go-name": "Body"
+        },
+        "id": {
+          "description": "ID represents the unique identifier for the message",
+          "type": "string",
+          "x-go-name": "ID"
+        },
+        "tag": {
+          "description": "Tag is a tag attached to a message",
+          "type": "string",
+          "x-go-name": "Tag"
+        }
+      },
+      "x-go-package": "github.com/szpakas/example-go-messenger"
+    },
+    "UserIn": {
+      "type": "object",
+      "title": "UserIn represents transport level model for single user submitted into the HTTP handler.",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "description": "Name represents the user to the outside world.",
+          "type": "string",
+          "minLength": 2,
+          "x-go-name": "Name"
+        }
+      },
+      "x-go-package": "github.com/szpakas/example-go-messenger"
+    }
+  },
+  "responses": {
+    "BadRequestError": {
+      "description": "A BadRequestError is an error that is generated when user submitted request which is incorrect.\nOne of the cases is some kind of validation error.\nRepeating the request will most probably not change the outcome."
+    },
+    "InternalServerError": {
+      "description": "A InternalServerError is an error that is generated when server could not produce response.\nRepeating the request will most probably not change the outcome."
+    },
+    "MessageCreatedResponse": {
+      "description": "MessageCreatedResponse represents response to creation of the message.",
+      "headers": {
+        "Location": {
+          "type": "string",
+          "description": "Location is relative URL to newly created user."
+        }
+      }
+    },
+    "MessageReadResponse": {
+      "description": "MessageResponse represents transport level model for single message returned from system to user.",
+      "schema": {
+        "$ref": "#/definitions/MessageOut"
+      }
+    },
+    "MessagesCollectionResponse": {
+      "description": "MessagesCollectionResponse represents transport level model for collection of messages returned from system to user.",
+      "schema": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/MessageOut"
+        }
+      }
+    },
+    "NotFoundError": {
+      "description": "A NotFoundError is an error that is generated when requested element could not be found.\nIt's also used when collection is requested for specific parameters combination and returns empty."
+    },
+    "UserCreatedResponse": {
+      "description": "UserCreatedResponse represents response to creation of the user."
+    }
+  }
+}

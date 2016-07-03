@@ -47,7 +47,8 @@ func main() {
 
 	st := NewMemoryStorage()
 	h := NewHTTPDefaultHandler(st)
-	ml := NewLoggingMiddleware(h, lgr)
+	mc := NewCORSMiddleware(h)
+	ml := NewLoggingMiddleware(mc, lgr)
 	s := NewHTTPServer(cfg.HTTPHost, cfg.HTTPPort, ml)
 
 	if err := s.ListenAndServe(); err != nil {

@@ -244,25 +244,25 @@ func Test_HTTPHandler_Message_Find_Success_Found(t *testing.T) {
 		dbUsers []User
 		dbMsg   []Message
 		tag     Tag
-		exp     TrOutMessagesCollection
+		exp     MessagesCollectionOut
 	}{
 		"single": {
 			[]User{tfUserA},
 			[]Message{tfMsgAA},
 			tfTrInMsgAA.Tag,
-			TrOutMessagesCollection{tfTrOutMsgAA},
+			MessagesCollectionOut{tfTrOutMsgAA},
 		},
 		"two": {
 			[]User{tfUserA},
 			[]Message{tfMsgAA, tfMsgAB},
 			tfTrInMsgAA.Tag,
-			TrOutMessagesCollection{tfTrOutMsgAA, tfTrOutMsgAB},
+			MessagesCollectionOut{tfTrOutMsgAA, tfTrOutMsgAB},
 		},
 		"three, cross user, partial": {
 			[]User{tfUserA, tfUserB},
 			[]Message{tfMsgAA, tfMsgAB, tfMsgBA, tfMsgBB},
 			tfTrInMsgAA.Tag,
-			TrOutMessagesCollection{tfTrOutMsgAA, tfTrOutMsgAB, tfTrOutMsgBA},
+			MessagesCollectionOut{tfTrOutMsgAA, tfTrOutMsgAB, tfTrOutMsgBA},
 		},
 	}
 
@@ -291,7 +291,7 @@ func Test_HTTPHandler_Message_Find_Success_Found(t *testing.T) {
 		a.Equal(t, http.StatusOK, res.StatusCode, "mismatch on response code")
 		a.Equal(t, "application/json", res.Header.Get("Content-Type"), "mismatch on response content encoding")
 
-		var resBodyGot TrOutMessagesCollection
+		var resBodyGot MessagesCollectionOut
 		err = json.NewDecoder(res.Body).Decode(&resBodyGot)
 		res.Body.Close()
 		if !a.NoError(t, err, "unexpected error on response body read") {
@@ -433,7 +433,7 @@ func Test_HTTPHandler_Message_Read_Success_Found(t *testing.T) {
 	a.Equal(t, http.StatusOK, res.StatusCode, "mismatch on response code")
 	a.Equal(t, "application/json", res.Header.Get("Content-Type"), "mismatch on response content encoding")
 
-	var resBodyGot TrOutMessage
+	var resBodyGot MessageOut
 	err = json.NewDecoder(res.Body).Decode(&resBodyGot)
 	res.Body.Close()
 	ar.NoError(t, err, "unexpected error on response body read")
@@ -549,4 +549,21 @@ func Test_HTTPHandler_Message_GET_unknownPath(t *testing.T) {
 	ar.NoError(t, err, "unexpected error from HTTP client")
 	a.Equal(t, http.StatusNotFound, res.StatusCode, "mismatch on response code")
 	a.EqualValues(t, 0, res.ContentLength, "non empty response body")
+}
+
+func Test_HTTPHandler_Swagger(t *testing.T) {
+	st := NewMemoryStorage()
+	h := NewHTTPDefaultHandler(st)
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	// GIVEN: message NOT in DB
+	res, err := http.Get(fmt.Sprintf("%s/v1/swagger.json", ts.URL))
+
+	// THEN: validate response
+	ar.NoError(t, err, "unexpected error from HTTP client")
+	a.Equal(t, http.StatusOK, res.StatusCode, "mismatch on response code")
+	a.NotZero(t, res.ContentLength, "empty response body")
+
+	a.Equal(t, "*", res.Header.Get("Access-Control-Allow-Origin"), "Missing CORS header")
 }

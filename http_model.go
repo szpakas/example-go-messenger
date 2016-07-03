@@ -4,37 +4,47 @@ var (
 	userNameLengthMin = 2
 )
 
-// TrInUser represents transport level model for single user submitted into the HTTP handler.
-type TrInUser struct {
+// UserIn represents transport level model for single user submitted into the HTTP handler.
+type UserIn struct {
 	// Name represents the user to the outside world.
+	//
+	// required: true
+	// min length: 2
 	Name string `json:"name"`
 }
 
 // Validate validates the User and returns error on failure.
-func (m TrInUser) Validate() error {
-	if m.Name == "" {
+func (u UserIn) Validate() error {
+	if u.Name == "" {
 		return NewValidationError("Name missing")
 	}
-	if len(m.Name) < userNameLengthMin {
+	if len(u.Name) < userNameLengthMin {
 		return NewValidationError("Name too short")
 	}
 	return nil
 }
 
-// TrInMessage represents transport level model for single message sent by user to the system.
-type TrInMessage struct {
-	// Body represents the actual message.
+// MessageIn represents transport level model for single message sent by user to the system.
+type MessageIn struct {
+	// Body represents the actual message
+	//
+	// required: true
 	Body string `json:"body"`
 
-	// Author is an Name of the user who authored message.
+	// Author is an Name of the user who authored message
+	//
+	// required: true
 	Author string `json:"author"`
 
 	// Tag is a tag attached to a message
+	//
+	// required: true
+	// min length: 2
 	Tag Tag `json:"tag"`
 }
 
 // Validate validates the Message and returns error on failure.
-func (m TrInMessage) Validate() error {
+func (m MessageIn) Validate() error {
 	if m.Body == "" {
 		return NewValidationError("missing Body")
 	}
@@ -47,20 +57,39 @@ func (m TrInMessage) Validate() error {
 	return nil
 }
 
-// TrOutMessage represents transport level model for single message returned from system to user.
-type TrOutMessage struct {
-	// Body represents the actual message.
+// A MessageID parameter model.
+//
+// This is used for operations that want the ID of an message in the path
+//
+// swagger:parameters MessageRead
+type MessageID struct {
+	// ID represents the unique identifier for the message
+	//
+	// in: path
+	// required: true
+	ID string `json:"id"` // json tag is used to modify the swagger naming
+}
+
+type MessageOut struct {
+	// ID represents the unique identifier for the message
+	//
+	// required: true
 	ID string `json:"id"`
 
-	// Body represents the actual message.
+	// Body represents the actual message
+	//
+	// required: true
 	Body string `json:"body"`
 
-	// Author is an Name of the user who authored message.
+	// Author is an Name of the user who authored message
+	//
+	// required: true
 	Author string `json:"author"`
 
 	// Tag is a tag attached to a message
+	//
+	// required: true
 	Tag Tag `json:"tag"`
 }
 
-// TrOutMessagesCollection represents collection of messages returned from server
-type TrOutMessagesCollection []TrOutMessage
+type MessagesCollectionOut []MessageOut
