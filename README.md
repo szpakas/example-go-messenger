@@ -1,6 +1,6 @@
 # Messenger example in GO [![Build Status](https://travis-ci.org/szpakas/example-go-messenger.svg?branch=master)](https://travis-ci.org/szpakas/example-go-messenger)
 
-[![Apache 2.0 License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/szpakas/example-messenger-go/blob/master/LICENSE) [![codecov](https://codecov.io/gh/szpakas/example-go-messenger/branch/master/graph/badge.svg)](https://codecov.io/gh/szpakas/example-go-messenger)
+[![Apache 2.0 License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/szpakas/example-messenger-go/blob/master/LICENSE) [![codecov](https://codecov.io/gh/szpakas/example-go-messenger/branch/master/graph/badge.svg)](https://codecov.io/gh/szpakas/example-go-messenger) [![Go Report Card](https://goreportcard.com/badge/github.com/szpakas/example-go-messenger)](https://goreportcard.com/report/github.com/szpakas/example-go-messenger)
 
 `example-messenger-go` is a proof of concept implementation of messenger app in GO.
 
