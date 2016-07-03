@@ -1,4 +1,4 @@
-# Messenger example in GO
+# Messenger example in GO [![Build Status](https://travis-ci.org/szpakas/example-go-messenger.svg?branch=master)](https://travis-ci.org/szpakas/example-go-messenger)
 
 [![Apache 2.0 License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/szpakas/example-messenger-go/blob/master/LICENSE)
 
