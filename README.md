@@ -8,6 +8,10 @@
 
     $ go test -v ./
 
+test coverage:
+
+    go test -covermode=count -coverprofile=count.out ./ && go tool cover -html=count.out
+
 ## Building
 [govend](https://github.com/govend/govend) is used for vendoring.
 
