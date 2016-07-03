@@ -414,7 +414,7 @@ func Test_HTTPHandler_Message_Find_Failure(t *testing.T) {
 }
 
 func Test_HTTPHandler_Message_Read_Success_Found(t *testing.T) {
-	st := NewMemoryStorage()
+	st := NewTmMemoryStorageMock()
 	h := NewHTTPDefaultHandler(st)
 	ts := httptest.NewServer(h)
 	defer ts.Close()
@@ -563,4 +563,35 @@ func Test_HTTPHandler_Swagger(t *testing.T) {
 	ar.NoError(t, err, "unexpected error from HTTP client")
 	a.Equal(t, http.StatusOK, res.StatusCode, "mismatch on response code")
 	a.NotZero(t, res.ContentLength, "empty response body")
+}
+
+func Test_HTTPHandler_Options(t *testing.T) {
+	var ts *httptest.Server
+	defer func() {
+		if ts != nil {
+			ts.Close()
+		}
+	}()
+
+	tests := []struct {
+		path string
+	}{
+		{"/v1/users"},
+	}
+
+	for _, tc := range tests {
+		st := NewTmMemoryStorageMock()
+
+		h := NewHTTPDefaultHandler(st)
+		ts = httptest.NewServer(h)
+
+		req, err := http.NewRequest(http.MethodOptions, fmt.Sprintf("%s%s", ts.URL, tc.path), nil)
+		ar.NoError(t, err, "[%s] unexpected error from request creation", tc.path)
+
+		res, err := http.DefaultClient.Do(req)
+		ar.NoError(t, err, "[%s] unexpected error from call", tc.path)
+
+		a.EqualValues(t, 0, res.ContentLength, "[%s] non empty response body", tc.path)
+		a.Equal(t, http.StatusOK, res.StatusCode, "[%s] mismatch on response code", tc.path)
+	}
 }

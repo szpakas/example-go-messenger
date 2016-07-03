@@ -54,11 +54,15 @@ func Test_HTTPMiddleware_Logging(t *testing.T) {
 		method    string
 		reqBody   string
 		handlerFn func(w http.ResponseWriter, r *http.Request)
+		headers   map[string]string
 		exp       spy.Log
 	}{
 		"success, GET, ok": {
-			method: http.MethodGet,
+			method:  http.MethodGet,
+			headers: map[string]string{"X-Test-A": "123", "X-Test-B": "456"},
 			handlerFn: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("X-Test-A", "123")
+				w.Header().Set("X-Test-B", "456")
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte("0123456789"))
 			},
@@ -166,6 +170,10 @@ func Test_HTTPMiddleware_Logging(t *testing.T) {
 		req, _ := http.NewRequest(tc.method, "http://example.com/foo", reqBodyReader)
 		res := httptest.NewRecorder()
 		m.ServeHTTP(res, req)
+
+		for hName, hVal := range tc.headers {
+			a.Equal(t, hVal, res.Header().Get(hName), "[%s] mismatch on response header: %s", sym, hName)
+		}
 
 		got := sink.Logs()
 		if a.Len(t, got, 1, "[%s] incorrect number of logs generated", sym) {
