@@ -51,8 +51,19 @@ swagger generate spec -o ./swagger.json
 
 build locally
 
-    $ docker build -t fakepushprovider .
+    $ docker build -t szpakas/example-go-messenger .
 
+or pull from docker hub
+
+    $ docker pull szpakas/example-go-messenger
+
+```bash
+docker run --rm -i \
+    -p 8080:8080 \
+    -e "APP_LOG_LEVEL=debug" \
+    --name example-go-messenger szpakas/example-go-messenger
+```
+    
 ## License
 
 Apache 2.0, see [LICENSE](./LICENSE).
